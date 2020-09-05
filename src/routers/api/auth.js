@@ -2,13 +2,14 @@ const router = require('express').Router();
 const auth = require('../../middleware/auth');
 const User = require('../../models/user');
 const { body, validationResult } = require('express-validator');
+const errorHandler = require('../../middleware/error-handler');
 
 // @route Get api/auth
 // @desc Test authentication
 // @access private
 router.get('/', auth, async (req, res) => {
     res.json(req.user);
-});
+}, errorHandler);
 
 // @route Post api/auth
 // @desc Authenticate user and get token
