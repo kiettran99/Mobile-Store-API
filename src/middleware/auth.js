@@ -6,14 +6,14 @@ const auth = async (req, res, next) => {
         const header = req.header('Authorization');
 
         if (!header) {
-            return res.status(401).json({ message: 'No Token, authorization denied!'});
+            return res.status(401).json({ message: 'No Token, authorization denied!' });
         }
-    
+
         const token = header.replace('BEARER ', '');
-        
+
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        
-        const user = await User.findOne({ _id: decoded._id, 'tokens.token': token });
+
+        const user = await User.findOne({ _id: decoded._id, 'tokens.token': token }).select('-password');
 
         if (!user) {
             throw new Error();
@@ -21,12 +21,12 @@ const auth = async (req, res, next) => {
 
         req.user = user;
         req.token = token;
-        
+
         next();
     }
     catch (e) {
         console.log(e);
-        res.status(401).json({ message: 'Unauthorized'});
+        res.status(401).json({ message: 'Unauthorized' });
     }
 };
 
