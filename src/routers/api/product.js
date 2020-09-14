@@ -291,6 +291,7 @@ router.put('/comment/:id', [auth,
             user: req.user.id
         };
 
+        //Newest first page.
         product.comments.push(newComment);
 
         await product.save();
@@ -324,7 +325,7 @@ router.delete('/comment/:id/:comment_id', auth, async (req, res) => {
 
         // Check user
         if (comment.user.toString() !== req.user.id) {
-            return res.status(401).json({ msg: 'User not authorized'});
+            return res.status(401).json({ msg: 'User not authorized' });
         }
 
         // Remove Index
@@ -335,6 +336,339 @@ router.delete('/comment/:id/:comment_id', auth, async (req, res) => {
         await product.save();
 
         res.json(product.comments);
+    }
+    catch (e) {
+        console.log(e);
+
+        if (e.kind === 'ObjectId') {
+            return res.status(404).json({ msg: 'Product is not exists. ' });
+        }
+
+        res.status(500).send('Server is errors.');
+    }
+});
+
+// @route Put api/products/:product_id/comments/unlike/:comment_id
+// @desc Like a comment
+// @access Private
+router.put('/:product_id/comments/like/:comment_id', auth, async (req, res) => {
+    try {
+        // Validation params Id
+        const productId = req.params.product_id;
+        const commentId = req.params.comment_id;
+
+        if (!productId) {
+            return res.status(400).json({ msg: 'Product\'\s ID is empty.' });
+        }
+
+        if (!commentId) {
+            return res.status(400).json({ msg: 'Comment\'\s ID is empty.' });
+        }
+
+        // Find a product by Id and comments has comment'id
+        const product = await Product.findOne({ _id: productId, 'comments._id': commentId });
+
+        // Find Comment by id
+        const comment = product.comments.find(comment => comment.id === commentId);
+
+        // Make sure user is not like product yet.
+        const isLiked = comment.likes.
+            filter(like => like.user.toString() === req.user.id).length > 0;
+
+        if (isLiked) {
+            return res.status(400).json({ msg: 'Comment is liked already.' });
+        }
+
+        // Push User into Likes array.
+        comment.likes.unshift({ user: req.user.id });
+
+        await product.save();
+
+        // Response to client
+        res.json(comment);
+    }
+    catch (e) {
+        console.log(e);
+
+        if (e.kind === 'ObjectId') {
+            return res.status(404).json({ msg: 'Product is not exists. ' });
+        }
+
+        res.status(500).send('Server is errors.');
+    }
+});
+
+// @route Put api/products/:product_id/comments/unlike/:comment_id
+// @desc UnLike a comment
+// @access Private
+router.put('/:product_id/comments/unlike/:comment_id', auth, async (req, res) => {
+    try {
+        // Validation params Id
+        const productId = req.params.product_id;
+        const commentId = req.params.comment_id;
+
+        if (!productId) {
+            return res.status(400).json({ msg: 'Product\'\s ID is empty.' });
+        }
+
+        if (!commentId) {
+            return res.status(400).json({ msg: 'Comment\'\s ID is empty.' });
+        }
+
+        // Find a product by Id and comments has comment'id
+        const product = await Product.findOne({ _id: productId, 'comments._id': commentId });
+
+        // Find Comment by id
+        const comment = product.comments.find(comment => comment.id === commentId);
+
+        // Make sure user liked product yet.
+        const isNotLiked = comment.likes.filter(like => like.user.toString() === req.user.id).length === 0;
+
+        if (isNotLiked) {
+            return res.status(400).json({ msg: 'Comment has not been liked yet.' });
+        }
+
+        // Remove index
+        const removeIndex = comment.likes.map(like => like.user.toString()).indexOf(req.user.id);
+
+        comment.likes.splice(removeIndex, 1);
+
+        await product.save();
+
+        // Response to client
+        res.json(comment);
+    }
+    catch (e) {
+        console.log(e);
+
+        if (e.kind === 'ObjectId') {
+            return res.status(404).json({ msg: 'Product is not exists. ' });
+        }
+
+        res.status(500).send('Server is errors.');
+    }
+});
+
+// @route Put api/products/:product_id/comments/reply/:comment_id
+// @desc Rely a comment.
+// @access private
+router.put('/:product_id/comments/reply/:comment_id', [auth,
+    [
+        body('text', 'text is required.').not().isEmpty()
+    ]
+], async (req, res) => {
+    const errors = validationResult(req);
+
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
+    try {
+        // Validation params Id
+        const productId = req.params.product_id;
+        const commentId = req.params.comment_id;
+
+        if (!productId) {
+            return res.status(400).json({ msg: 'Product\'\s ID is empty.' });
+        }
+
+        if (!commentId) {
+            return res.status(400).json({ msg: 'Comment\'\s ID is empty.' });
+        }
+
+        // Find a product by Id and comments has comment'id
+        const product = await Product.findOne({ _id: productId, 'comments._id': commentId });
+
+        // Find Comment by id
+        const comment = product.comments.find(comment => comment.id === commentId);
+
+        const newReply = {
+            text: req.body.text,
+            name: req.user.name,
+            user: req.user.id
+        };
+
+        //Newest first page.
+        comment.replies.push(newReply);
+
+        await product.save();
+
+        res.json(comment);
+    }
+    catch (e) {
+        console.log(e);
+
+        if (e.kind === 'ObjectId') {
+            return res.status(404).json({ msg: 'Product is not exists. ' });
+        }
+
+        res.status(500).send('Server is errors.');
+    }
+});
+
+// @route Delete api/products/:product_id/comments/reply/:comment_id/:reply_id
+// @desc Remove rely a comment.
+// @access private
+router.delete('/:product_id/comments/reply/:comment_id/:reply_id', auth, async (req, res) => {
+    const errors = validationResult(req);
+
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
+    try {
+        // Validation params Id
+        const productId = req.params.product_id;
+        const commentId = req.params.comment_id;
+        const replyId = req.params.reply_id;
+
+        if (!productId) {
+            return res.status(400).json({ msg: 'Product\'\s ID is empty.' });
+        }
+
+        if (!commentId) {
+            return res.status(400).json({ msg: 'Comment\'\s ID is empty.' });
+        }
+
+        // Find a product by Id and comments has comment'id
+        const product = await Product.findOne({ _id: productId, 'comments._id': commentId });
+
+        // Find Comment by id
+        const comment = product.comments.find(comment => comment.id === commentId);
+
+         // Find Reply by id
+         const reply = comment.replies.find(reply => reply.id === replyId);
+
+        // Check user
+        if (reply.user.toString() !== req.user.id) {
+            return res.status(401).json({ msg: 'User not authorized' });
+        }
+
+        // Remove Index
+        const removeIndex = comment.replies.map(reply => reply.user.toString()).indexOf(req.user.id);
+
+        comment.replies.splice(removeIndex, 1);
+
+        await product.save();
+        
+        res.json(comment);
+    }
+    catch (e) {
+        console.log(e);
+
+        if (e.kind === 'ObjectId') {
+            return res.status(404).json({ msg: 'Product is not exists. ' });
+        }
+
+        res.status(500).send('Server is errors.');
+    }
+});
+
+// @route Put api/products/:product_id/comments/:comment_id/reply/like/:reply_id
+// @desc Like a reply
+// @access Private
+router.put('/:product_id/comments/:comment_id/reply/like/:reply_id', auth, async (req, res) => {
+    try {
+        // Validation params Id
+        const productId = req.params.product_id;
+        const commentId = req.params.comment_id;
+        const replyId = req.params.reply_id;
+
+        if (!productId) {
+            return res.status(400).json({ msg: 'Product\'\s ID is empty.' });
+        }
+
+        if (!commentId) {
+            return res.status(400).json({ msg: 'Comment\'\s ID is empty.' });
+        }
+
+        // Find a product by Id and comments has comment'id
+        const product = await Product.findOne({ _id: productId, 'comments._id': commentId });
+
+        // Find Comment by id
+        const comment = product.comments.find(comment => comment.id === commentId);
+
+        // Find Reply by id
+        const reply = comment.replies.find(reply => reply.id === replyId);
+
+        if (!reply) {
+            return res.status(404).json({ msg: 'Reply is not found !' });
+        }
+
+        // Make sure user is not like product yet.
+        const isLiked = reply.likes.
+            filter(like => like.user.toString() === req.user.id).length > 0;
+
+        if (isLiked) {
+            return res.status(400).json({ msg: 'Reply is liked already.' });
+        }
+
+        // Push User into Likes array.
+        reply.likes.unshift({ user: req.user.id });
+
+        await product.save();
+
+        // Response to client
+        res.json(comment);
+    }
+    catch (e) {
+        console.log(e);
+
+        if (e.kind === 'ObjectId') {
+            return res.status(404).json({ msg: 'Product is not exists. ' });
+        }
+
+        res.status(500).send('Server is errors.');
+    }
+});
+
+// @route Put api/products/:product_id/comments/:comment_id/reply/unlike/:reply_id
+// @desc UnLike a reply
+// @access Private
+router.put('/:product_id/comments/:comment_id/reply/unlike/:reply_id', auth, async (req, res) => {
+    try {
+        // Validation params Id
+        const productId = req.params.product_id;
+        const commentId = req.params.comment_id;
+        const replyId = req.params.reply_id;
+
+        if (!productId) {
+            return res.status(400).json({ msg: 'Product\'\s ID is empty.' });
+        }
+
+        if (!commentId) {
+            return res.status(400).json({ msg: 'Comment\'\s ID is empty.' });
+        }
+
+        // Find a product by Id and comments has comment'id
+        const product = await Product.findOne({ _id: productId, 'comments._id': commentId });
+
+        // Find Comment by id
+        const comment = product.comments.find(comment => comment.id === commentId);
+
+        // Find Reply by id
+        const reply = comment.replies.find(reply => reply.id === replyId);
+
+        if (!reply) {
+            return res.status(404).json({ msg: 'Reply is not found !' });
+        }
+
+        // Make sure user liked product yet.
+        const isNotLiked = reply.likes.filter(like => like.user.toString() === req.user.id).length === 0;
+
+        if (isNotLiked) {
+            return res.status(400).json({ msg: 'Reply has not been liked yet.' });
+        }
+
+        // Remove index
+        const removeIndex = reply.likes.map(like => like.user.toString()).indexOf(req.user.id);
+
+        reply.likes.splice(removeIndex, 1);
+
+        await product.save();
+
+        // Response to client
+        res.json(comment);
     }
     catch (e) {
         console.log(e);

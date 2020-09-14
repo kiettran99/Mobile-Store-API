@@ -30,7 +30,36 @@ const productSchema = mongoose.Schema({
         date: {
             type: Date,
             default: Date.now
-        }
+        },
+        likes: [{
+            user: {
+                type: ObjectId,
+                ref: 'User'
+            }
+        }],
+        replies: [{
+            user: {
+                type: ObjectId,
+                ref: 'User'
+            },
+            text: {
+                type: String
+            },
+            name: {
+                type: String
+            },
+            date: {
+                type: Date,
+                default: Date.now
+            },
+            likes: [{
+                user: {
+                    type: ObjectId,
+                    ref: 'User'
+                }
+            }],
+
+        }]
     }]
 }, {
     timeStamps: true

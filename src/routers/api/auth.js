@@ -50,7 +50,6 @@ router.post('/', [
 // @access private
 router.get('/logout', auth, async (req, res) => {
     try {
-        debugger;
         // Remove a current token.
         req.user.tokens = req.user.tokens.filter(token => token.token !== req.token);
 
