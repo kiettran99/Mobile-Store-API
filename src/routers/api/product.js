@@ -329,7 +329,7 @@ router.delete('/comment/:id/:comment_id', auth, async (req, res) => {
         }
 
         // Remove Index
-        const removeIndex = product.comments.map(comment => comment.user.toString()).indexOf(req.user.id);
+        const removeIndex = product.comments.map(comment => comment.id).indexOf(req.params.comment_id);
 
         product.comments.splice(removeIndex, 1);
 
@@ -545,7 +545,7 @@ router.delete('/:product_id/comments/reply/:comment_id/:reply_id', auth, async (
         }
 
         // Remove Index
-        const removeIndex = comment.replies.map(reply => reply.user.toString()).indexOf(req.user.id);
+        const removeIndex = comment.replies.map(reply => reply.id).indexOf(replyId);
 
         comment.replies.splice(removeIndex, 1);
 
