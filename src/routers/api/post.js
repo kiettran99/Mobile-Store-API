@@ -1,66 +1,88 @@
 const router = require('express').Router();
-const Product = require('../../models/product');
-const storage = require('../../firebase/firebase');
-const auth = require('../../middleware/auth');
-const isEmptyObject = require('../../utils/isEmptyObject');
 const { body, validationResult } = require('express-validator');
+const Post = require('../../models/post');
+const auth = require('../../middleware/auth');
+const storage = require('../../firebase/firebase');
 const upload = require('../../utils/upload');
 
+// @route Get /api/posts/
+// @route-full Get /api/posts?limit=number&skip=number
+// @desc Feed a post
+// @access public
 router.get('/', async (req, res) => {
     try {
-        const products = await Product.find({});
-        res.send(products);
+        // Limit post with 5 posts and if not skip then default value is 0.
+        const limit = req.query.limit || 5;
+        const skip = req.query.skip || 0;
+
+        const posts = await Post.find({}).limit(limit).skip(skip);
+
+        res.send(posts);
+
     }
     catch (e) {
-        cosnole.log(e);
+        console.log(e);
         res.status(500).send('Server is errors.');
     }
 });
 
+// @route Get /api/posts/:id
+// @desc Feed a post detail
+// @access public
 router.get('/:id', async (req, res) => {
     try {
-        const id = req.params.id;
-        const product = await Product.findById(id);
-        res.send(product);
+        const post = await Post.findById(req.params.id);
+        res.json(post);
     }
     catch (e) {
+        console.log(e);
 
         if (e.kind === 'ObjectId') {
-            res.status(404).send('Product is not exists.');
+            return res.status(404).send('Post is not exists.');
         }
-
-        cosnole.log(e);
 
         res.status(500).send('Server is errors.');
     }
 });
 
-router.post('/', auth, upload.single('image'), async (req, res) => {
+// @route Post /api/posts/
+// @desc Upload a post
+// @access private
+router.post('/', auth, upload.single('image'), [
+    body('text', 'Text is required.').not().isEmpty()
+], async (req, res) => {
     try {
-        const newProduct = req.body;
-        const isEmpty = isEmptyObject(newProduct);
+        const errors = validationResult(req);
 
-        if (isEmpty) {
-            res.status(400).send("Product is empty object.");
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
         }
 
-        const product = new Product(newProduct);
-        await product.save();
+        const newPost = {
+            text: req.body.text,
+            user: req.user.id,
+            name: req.user.name,
+        }
 
+        // Create a instance post and save it.
+        const post = new Post(newPost);
+        await post.save();
+
+        // Check post uploaded image.
         if (req.file) {
 
             //Create a storage ref
-            const storageRef = storage.ref(`/${product._id}/${req.file.originalname}`);
+            const storageRef = storage.ref(`/posts/${post.id}/${req.file.originalname}`);
 
             //Upload image
             await storageRef.put(req.file.buffer);
 
-            product.imageUrl = await storageRef.getDownloadURL();
+            post.imageUrl = await storageRef.getDownloadURL();
 
-            await product.save();
+            await post.save();
         }
 
-        res.send(product);
+        res.json(post);
     }
     catch (e) {
         console.log(e);
@@ -68,41 +90,36 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
     }
 });
 
-router.put('/:id', upload.single('image'), async (req, res) => {
+// @route Put /api/posts/:id
+// @desc Edit a post By Id
+// @access private
+router.put('/:id', auth, upload.single('image'), [
+    body('text', 'Text is required.').not().isEmpty()
+], async (req, res) => {
     try {
-        //Validate a params and body of request.
-        const id = req.params.id;
-        const productUpdate = req.body;
+        const errors = validationResult(req);
 
-        if (!id || isEmptyObject(productUpdate)) {
-            return res.status(400).send("Please provide id or product.");
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
         }
 
-        const currentProduct = await Product.findById(id);
+        // Find a post
+        const post = await Post.findById(req.params.id);
 
-        if (!currentProduct) {
-            return res.status(404).send("product is not exists.");
+        // Check user
+        if (post.user.toString() != req.user.id) {
+            return res.status(401).json({ msg: 'User is not authorized.' });
         }
 
-        //Validate a object
-        const updates = Object.keys(productUpdate);
-        const allowUpdates = ['name', 'imageUrl', 'price', 'description', 'manufacturer'
-            , 'category', 'conditionProduct', 'quantity'];
-        const isValidOperation = updates.every(update => update === 'imageUrl'
-            || allowUpdates.includes(update));
+        post.text = req.body.text;
 
-        if (!isValidOperation) {
-            return res.status(400).send({ error: "Invalid update !" });
-        }
-
-        updates.forEach(update => currentProduct[update] = productUpdate[update]);
-
-        await currentProduct.save();
+        await post.save();
 
         // Check image upload
         if (req.file) {
-            const prevImageRef = storage.ref(`/${currentProduct._id.toString()}`);
+            const prevImageRef = storage.ref(`/posts/${post.id}`);
 
+            // Remove previous images and add new image
             prevImageRef.listAll().then((res) => {
                 res.items.forEach((itemRef) => {
                     itemRef.delete();
@@ -112,38 +129,42 @@ router.put('/:id', upload.single('image'), async (req, res) => {
             });
 
             //Create a storage ref
-            const storageRef = storage.ref(`/${currentProduct._id}/${req.file.originalname}`);
+            const storageRef = storage.ref(`/posts/${post.id}/${req.file.originalname}`);
 
             //Upload image
             await storageRef.put(req.file.buffer);
 
-            currentProduct.imageUrl = await storageRef.getDownloadURL();
+            post.imageUrl = await storageRef.getDownloadURL();
 
-            await currentProduct.save();
+            await post.save();
         }
 
-        return res.send(currentProduct);
+        res.json(post);
     }
     catch (e) {
         console.log(e);
+
+        if (e.kind === 'ObjectId') {
+            return res.status(404).send('Post is not exists.');
+        }
+
+        res.status(500).send({ msg: e });
     }
 });
 
-router.delete('/:id', async (req, res) => {
+// @route Delete /api/posts/
+// @desc Delete a post
+// @access private
+router.delete('/:id', auth, async (req, res) => {
     try {
-        const id = req.params.id;
-        if (!id) {
-            return res.status(400).send("Please provide Id.");
-        }
+        const post = await Post.findById(req.params.id);
 
-        const product = await Product.findById(id);
-
-        if (!product) {
-            return res.status(404).send("Product is not exists");
+        if (!post) {
+            return res.status(404).send("post is not exists");
         }
 
         //Find a folder image and remove
-        const prevImageRef = storage.ref(`/${product._id.toString()}`);
+        const prevImageRef = storage.ref(`/posts/${post.id}`);
 
         prevImageRef.listAll().then((res) => {
             res.items.forEach((itemRef) => {
@@ -153,23 +174,23 @@ router.delete('/:id', async (req, res) => {
             console.log('Fail', e);
         });
 
-        await product.remove();
+        await post.remove();
 
-        res.send({ "result": "remove successfuly", product });
+        res.send({ "result": "remove successfuly", post });
     }
     catch (e) {
         console.log(e);
 
         if (e.kind === 'ObjectId') {
-            return res.status(404).json({ msg: 'Product is not exists. ' });
+            return res.status(404).send('Post is not exists.');
         }
 
-        res.status(500).send('Server is error');
+        res.status(500).send({ msg: e });
     }
 });
 
-// @route Put api/products/like/:id
-// @desc Like a product
+// @route Put api/posts/like/:id
+// @desc Like a post
 // @access Private
 router.put('/like/:id', auth, async (req, res) => {
     try {
@@ -177,40 +198,40 @@ router.put('/like/:id', auth, async (req, res) => {
         const id = req.params.id;
 
         if (!id) {
-            return res.status(400).json({ msg: 'Product\'\s ID is empty.' });
+            return res.status(400).json({ msg: 'Post\'\s ID is empty.' });
         }
 
-        // Find a product by Id
-        const product = await Product.findById(id);
+        // Find a post by Id
+        const post = await Post.findById(id);
 
-        // Make sure user is not like product yet.
-        const isLiked = product.likes.filter(like => like.user.toString() === req.user.id).length > 0;
+        // Make sure user is not like post yet.
+        const isLiked = post.likes.filter(like => like.user.toString() === req.user.id).length > 0;
 
         if (isLiked) {
-            return res.status(400).json({ msg: 'Product is liked already.' });
+            return res.status(400).json({ msg: 'Post is liked already.' });
         }
 
         // Push User into Likes array.
-        product.likes.unshift({ user: req.user.id });
+        post.likes.unshift({ user: req.user.id });
 
-        await product.save();
+        await post.save();
 
         // Response to client
-        res.json(product.likes);
+        res.json(post.likes);
     }
     catch (e) {
         console.log(e);
 
         if (e.kind === 'ObjectId') {
-            return res.status(404).json({ msg: 'Product is not exists. ' });
+            return res.status(404).json({ msg: 'Post is not exists. ' });
         }
 
         res.status(500).send('Server is errors.');
     }
 });
 
-// @route Put api/products/unlike/:id
-// @desc Unlike a product
+// @route Put api/posts/unlike/:id
+// @desc Unlike a posts
 // @access Private
 router.put('/unlike/:id', auth, async (req, res) => {
     try {
@@ -218,42 +239,42 @@ router.put('/unlike/:id', auth, async (req, res) => {
         const id = req.params.id;
 
         if (!id) {
-            return res.status(400).json({ msg: 'Product\'\s ID is empty.' });
+            return res.status(400).json({ msg: 'post\'\s ID is empty.' });
         }
 
-        // Find a product by Id
-        const product = await Product.findById(id);
+        // Find a post by Id
+        const post = await post.findById(id);
 
-        // Make sure user liked product yet.
-        const isNotLiked = product.likes.filter(like => like.user.toString() === req.user.id).length === 0;
+        // Make sure user liked post yet.
+        const isNotLiked = post.likes.filter(like => like.user.toString() === req.user.id).length === 0;
 
         if (isNotLiked) {
-            return res.status(400).json({ msg: 'Product has not been liked yet.' });
+            return res.status(400).json({ msg: 'Post has not been liked yet.' });
         }
 
         // Remove index
-        const removeIndex = product.likes.map(like => like.user.toString()).indexOf(req.user.id);
+        const removeIndex = post.likes.map(like => like.user.toString()).indexOf(req.user.id);
 
-        product.likes.splice(removeIndex, 1);
+        post.likes.splice(removeIndex, 1);
 
-        await product.save();
+        await post.save();
 
         // Response to client
-        res.json(product.likes);
+        res.json(post.likes);
     }
     catch (e) {
         console.log(e);
 
         if (e.kind === 'ObjectId') {
-            return res.status(404).json({ msg: 'Product is not exists. ' });
+            return res.status(404).json({ msg: 'Post is not exists. ' });
         }
 
         res.status(500).send('Server is errors.');
     }
 });
 
-// @route Put /api/products/comment/:id
-// @desc Comment product.
+// @route Put /api/posts/comment/:id
+// @desc Comment post.
 // @access private
 router.put('/comment/:id', [auth,
     [
@@ -267,8 +288,8 @@ router.put('/comment/:id', [auth,
     }
 
     try {
-        // Find a product by id
-        const product = await Product.findById(req.params.id);
+        // Find a post by id
+        const post = await Post.findById(req.params.id);
 
         const newComment = {
             text: req.body.text,
@@ -277,32 +298,32 @@ router.put('/comment/:id', [auth,
         };
 
         //Newest first page.
-        product.comments.push(newComment);
+        post.comments.push(newComment);
 
-        await product.save();
+        await post.save();
 
-        res.json(product.comments);
+        res.json(post.comments);
     }
     catch (e) {
         console.log(e);
 
         if (e.kind === 'ObjectId') {
-            return res.status(404).json({ msg: 'Product is not exists. ' });
+            return res.status(404).json({ msg: 'Post is not exists. ' });
         }
 
         res.status(500).send('Server is errors.');
     }
 });
 
-// @route Delete /api/products/comment/:id/:comment_id
+// @route Delete /api/posts/comment/:id/:comment_id
 // @desc Delete comment on a product.
 // @access private
 router.delete('/comment/:id/:comment_id', auth, async (req, res) => {
     try {
-        const product = await Product.findById(req.params.id);
+        const post = await Post.findById(req.params.id);
 
         // Find comment by id
-        const comment = product.comments.find(comment => comment.id === req.params.comment_id);
+        const comment = post.comments.find(comment => comment.id === req.params.comment_id);
 
         if (!comment) {
             return res.status(404).json({ msg: 'Comment is not found' });
@@ -314,49 +335,50 @@ router.delete('/comment/:id/:comment_id', auth, async (req, res) => {
         }
 
         // Remove Index
-        const removeIndex = product.comments.map(comment => comment.id).indexOf(req.params.comment_id);
+        const removeIndex = post.comments.map(comment => comment.id).indexOf(req.params.comment_id);
 
-        product.comments.splice(removeIndex, 1);
+        post.comments.splice(removeIndex, 1);
 
-        await product.save();
+        await post.save();
 
-        res.json(product.comments);
+        res.json(post.comments);
     }
     catch (e) {
         console.log(e);
 
         if (e.kind === 'ObjectId') {
-            return res.status(404).json({ msg: 'Product is not exists. ' });
+            return res.status(404).json({ msg: 'Post is not exists. ' });
         }
 
         res.status(500).send('Server is errors.');
     }
 });
 
-// @route Put api/products/:product_id/comments/unlike/:comment_id
+// ----
+// @route Put api/posts/:post_id/comments/unlike/:comment_id
 // @desc Like a comment
 // @access Private
-router.put('/:product_id/comments/like/:comment_id', auth, async (req, res) => {
+router.put('/:post_id/comments/like/:comment_id', auth, async (req, res) => {
     try {
         // Validation params Id
-        const productId = req.params.product_id;
+        const postId = req.params.post_id;
         const commentId = req.params.comment_id;
 
-        if (!productId) {
-            return res.status(400).json({ msg: 'Product\'\s ID is empty.' });
+        if (!postId) {
+            return res.status(400).json({ msg: 'post\'\s ID is empty.' });
         }
 
         if (!commentId) {
             return res.status(400).json({ msg: 'Comment\'\s ID is empty.' });
         }
 
-        // Find a product by Id and comments has comment'id
-        const product = await Product.findOne({ _id: productId, 'comments._id': commentId });
+        // Find a post by Id and comments has comment'id
+        const post = await Post.findOne({ _id: postId, 'comments._id': commentId });
 
         // Find Comment by id
-        const comment = product.comments.find(comment => comment.id === commentId);
+        const comment = post.comments.find(comment => comment.id === commentId);
 
-        // Make sure user is not like product yet.
+        // Make sure user is not like post yet.
         const isLiked = comment.likes.
             filter(like => like.user.toString() === req.user.id).length > 0;
 
@@ -367,7 +389,7 @@ router.put('/:product_id/comments/like/:comment_id', auth, async (req, res) => {
         // Push User into Likes array.
         comment.likes.unshift({ user: req.user.id });
 
-        await product.save();
+        await post.save();
 
         // Response to client
         res.json(comment);
@@ -376,37 +398,37 @@ router.put('/:product_id/comments/like/:comment_id', auth, async (req, res) => {
         console.log(e);
 
         if (e.kind === 'ObjectId') {
-            return res.status(404).json({ msg: 'Product is not exists. ' });
+            return res.status(404).json({ msg: 'Post is not exists. ' });
         }
 
         res.status(500).send('Server is errors.');
     }
 });
 
-// @route Put api/products/:product_id/comments/unlike/:comment_id
+// @route Put api/posts/:post_id/comments/unlike/:comment_id
 // @desc UnLike a comment
 // @access Private
-router.put('/:product_id/comments/unlike/:comment_id', auth, async (req, res) => {
+router.put('/:post_id/comments/unlike/:comment_id', auth, async (req, res) => {
     try {
         // Validation params Id
-        const productId = req.params.product_id;
+        const postId = req.params.post_id;
         const commentId = req.params.comment_id;
 
-        if (!productId) {
-            return res.status(400).json({ msg: 'Product\'\s ID is empty.' });
+        if (!postId) {
+            return res.status(400).json({ msg: 'Post\'\s ID is empty.' });
         }
 
         if (!commentId) {
             return res.status(400).json({ msg: 'Comment\'\s ID is empty.' });
         }
 
-        // Find a product by Id and comments has comment'id
-        const product = await Product.findOne({ _id: productId, 'comments._id': commentId });
+        // Find a post by Id and comments has comment'id
+        const post = await Post.findOne({ _id: postId, 'comments._id': commentId });
 
         // Find Comment by id
-        const comment = product.comments.find(comment => comment.id === commentId);
+        const comment = post.comments.find(comment => comment.id === commentId);
 
-        // Make sure user liked product yet.
+        // Make sure user liked post yet.
         const isNotLiked = comment.likes.filter(like => like.user.toString() === req.user.id).length === 0;
 
         if (isNotLiked) {
@@ -418,7 +440,7 @@ router.put('/:product_id/comments/unlike/:comment_id', auth, async (req, res) =>
 
         comment.likes.splice(removeIndex, 1);
 
-        await product.save();
+        await post.save();
 
         // Response to client
         res.json(comment);
@@ -427,17 +449,17 @@ router.put('/:product_id/comments/unlike/:comment_id', auth, async (req, res) =>
         console.log(e);
 
         if (e.kind === 'ObjectId') {
-            return res.status(404).json({ msg: 'Product is not exists. ' });
+            return res.status(404).json({ msg: 'Post is not exists. ' });
         }
 
         res.status(500).send('Server is errors.');
     }
 });
 
-// @route Put api/products/:product_id/comments/reply/:comment_id
+// @route Put api/posts/:post_id/comments/reply/:comment_id
 // @desc Rely a comment.
 // @access private
-router.put('/:product_id/comments/reply/:comment_id', [auth,
+router.put('/:post_id/comments/reply/:comment_id', [auth,
     [
         body('text', 'text is required.').not().isEmpty()
     ]
@@ -450,22 +472,22 @@ router.put('/:product_id/comments/reply/:comment_id', [auth,
 
     try {
         // Validation params Id
-        const productId = req.params.product_id;
+        const postId = req.params.post_id;
         const commentId = req.params.comment_id;
 
-        if (!productId) {
-            return res.status(400).json({ msg: 'Product\'\s ID is empty.' });
+        if (!postId) {
+            return res.status(400).json({ msg: 'Post\'\s ID is empty.' });
         }
 
         if (!commentId) {
             return res.status(400).json({ msg: 'Comment\'\s ID is empty.' });
         }
 
-        // Find a product by Id and comments has comment'id
-        const product = await Product.findOne({ _id: productId, 'comments._id': commentId });
+        // Find a post by Id and comments has comment'id
+        const post = await Post.findOne({ _id: postId, 'comments._id': commentId });
 
         // Find Comment by id
-        const comment = product.comments.find(comment => comment.id === commentId);
+        const comment = post.comments.find(comment => comment.id === commentId);
 
         const newReply = {
             text: req.body.text,
@@ -476,7 +498,7 @@ router.put('/:product_id/comments/reply/:comment_id', [auth,
         //Newest first page.
         comment.replies.push(newReply);
 
-        await product.save();
+        await post.save();
 
         res.json(comment);
     }
@@ -484,17 +506,17 @@ router.put('/:product_id/comments/reply/:comment_id', [auth,
         console.log(e);
 
         if (e.kind === 'ObjectId') {
-            return res.status(404).json({ msg: 'Product is not exists. ' });
+            return res.status(404).json({ msg: 'Post is not exists. ' });
         }
 
         res.status(500).send('Server is errors.');
     }
 });
 
-// @route Delete api/products/:product_id/comments/reply/:comment_id/:reply_id
+// @route Delete api/posts/:post_id/comments/reply/:comment_id/:reply_id
 // @desc Remove rely a comment.
 // @access private
-router.delete('/:product_id/comments/reply/:comment_id/:reply_id', auth, async (req, res) => {
+router.delete('/:post_id/comments/reply/:comment_id/:reply_id', auth, async (req, res) => {
     const errors = validationResult(req);
 
     if (!errors.isEmpty()) {
@@ -503,26 +525,26 @@ router.delete('/:product_id/comments/reply/:comment_id/:reply_id', auth, async (
 
     try {
         // Validation params Id
-        const productId = req.params.product_id;
+        const postId = req.params.post_id;
         const commentId = req.params.comment_id;
         const replyId = req.params.reply_id;
 
-        if (!productId) {
-            return res.status(400).json({ msg: 'Product\'\s ID is empty.' });
+        if (!postId) {
+            return res.status(400).json({ msg: 'Post\'\s ID is empty.' });
         }
 
         if (!commentId) {
             return res.status(400).json({ msg: 'Comment\'\s ID is empty.' });
         }
 
-        // Find a product by Id and comments has comment'id
-        const product = await Product.findOne({ _id: productId, 'comments._id': commentId });
+        // Find a post by Id and comments has comment'id
+        const post = await Post.findOne({ _id: postId, 'comments._id': commentId });
 
         // Find Comment by id
-        const comment = product.comments.find(comment => comment.id === commentId);
+        const comment = post.comments.find(comment => comment.id === commentId);
 
-         // Find Reply by id
-         const reply = comment.replies.find(reply => reply.id === replyId);
+        // Find Reply by id
+        const reply = comment.replies.find(reply => reply.id === replyId);
 
         // Check user
         if (reply.user.toString() !== req.user.id) {
@@ -535,43 +557,43 @@ router.delete('/:product_id/comments/reply/:comment_id/:reply_id', auth, async (
         comment.replies.splice(removeIndex, 1);
 
         await product.save();
-        
+
         res.json(comment);
     }
     catch (e) {
         console.log(e);
 
         if (e.kind === 'ObjectId') {
-            return res.status(404).json({ msg: 'Product is not exists. ' });
+            return res.status(404).json({ msg: 'Post is not exists. ' });
         }
 
         res.status(500).send('Server is errors.');
     }
 });
 
-// @route Put api/products/:product_id/comments/:comment_id/reply/like/:reply_id
+// @route Put api/posts/:post_id/comments/:comment_id/reply/like/:reply_id
 // @desc Like a reply
 // @access Private
-router.put('/:product_id/comments/:comment_id/reply/like/:reply_id', auth, async (req, res) => {
+router.put('/:post_id/comments/:comment_id/reply/like/:reply_id', auth, async (req, res) => {
     try {
         // Validation params Id
-        const productId = req.params.product_id;
+        const postId = req.params.post_id;
         const commentId = req.params.comment_id;
         const replyId = req.params.reply_id;
 
-        if (!productId) {
-            return res.status(400).json({ msg: 'Product\'\s ID is empty.' });
+        if (!postId) {
+            return res.status(400).json({ msg: 'Post\'\s ID is empty.' });
         }
 
         if (!commentId) {
             return res.status(400).json({ msg: 'Comment\'\s ID is empty.' });
         }
 
-        // Find a product by Id and comments has comment'id
-        const product = await Product.findOne({ _id: productId, 'comments._id': commentId });
+        // Find a post by Id and comments has comment'id
+        const post = await Post.findOne({ _id: postId, 'comments._id': commentId });
 
         // Find Comment by id
-        const comment = product.comments.find(comment => comment.id === commentId);
+        const comment = post.comments.find(comment => comment.id === commentId);
 
         // Find Reply by id
         const reply = comment.replies.find(reply => reply.id === replyId);
@@ -580,7 +602,7 @@ router.put('/:product_id/comments/:comment_id/reply/like/:reply_id', auth, async
             return res.status(404).json({ msg: 'Reply is not found !' });
         }
 
-        // Make sure user is not like product yet.
+        // Make sure user is not like post yet.
         const isLiked = reply.likes.
             filter(like => like.user.toString() === req.user.id).length > 0;
 
@@ -591,7 +613,7 @@ router.put('/:product_id/comments/:comment_id/reply/like/:reply_id', auth, async
         // Push User into Likes array.
         reply.likes.unshift({ user: req.user.id });
 
-        await product.save();
+        await post.save();
 
         // Response to client
         res.json(comment);
@@ -600,36 +622,36 @@ router.put('/:product_id/comments/:comment_id/reply/like/:reply_id', auth, async
         console.log(e);
 
         if (e.kind === 'ObjectId') {
-            return res.status(404).json({ msg: 'Product is not exists. ' });
+            return res.status(404).json({ msg: 'Post is not exists. ' });
         }
 
         res.status(500).send('Server is errors.');
     }
 });
 
-// @route Put api/products/:product_id/comments/:comment_id/reply/unlike/:reply_id
+// @route Put api/posts/:post_id/comments/:comment_id/reply/unlike/:reply_id
 // @desc UnLike a reply
 // @access Private
-router.put('/:product_id/comments/:comment_id/reply/unlike/:reply_id', auth, async (req, res) => {
+router.put('/:post_id/comments/:comment_id/reply/unlike/:reply_id', auth, async (req, res) => {
     try {
         // Validation params Id
-        const productId = req.params.product_id;
+        const postId = req.params.post_id;
         const commentId = req.params.comment_id;
         const replyId = req.params.reply_id;
 
-        if (!productId) {
-            return res.status(400).json({ msg: 'Product\'\s ID is empty.' });
+        if (!postId) {
+            return res.status(400).json({ msg: 'Post\'\s ID is empty.' });
         }
 
         if (!commentId) {
             return res.status(400).json({ msg: 'Comment\'\s ID is empty.' });
         }
 
-        // Find a product by Id and comments has comment'id
-        const product = await Product.findOne({ _id: productId, 'comments._id': commentId });
+        // Find a post by Id and comments has comment'id
+        const post = await Post.findOne({ _id: postId, 'comments._id': commentId });
 
         // Find Comment by id
-        const comment = product.comments.find(comment => comment.id === commentId);
+        const comment = post.comments.find(comment => comment.id === commentId);
 
         // Find Reply by id
         const reply = comment.replies.find(reply => reply.id === replyId);
@@ -638,7 +660,7 @@ router.put('/:product_id/comments/:comment_id/reply/unlike/:reply_id', auth, asy
             return res.status(404).json({ msg: 'Reply is not found !' });
         }
 
-        // Make sure user liked product yet.
+        // Make sure user liked post yet.
         const isNotLiked = reply.likes.filter(like => like.user.toString() === req.user.id).length === 0;
 
         if (isNotLiked) {
@@ -650,7 +672,7 @@ router.put('/:product_id/comments/:comment_id/reply/unlike/:reply_id', auth, asy
 
         reply.likes.splice(removeIndex, 1);
 
-        await product.save();
+        await post.save();
 
         // Response to client
         res.json(comment);
@@ -659,7 +681,7 @@ router.put('/:product_id/comments/:comment_id/reply/unlike/:reply_id', auth, asy
         console.log(e);
 
         if (e.kind === 'ObjectId') {
-            return res.status(404).json({ msg: 'Product is not exists. ' });
+            return res.status(404).json({ msg: 'Post is not exists. ' });
         }
 
         res.status(500).send('Server is errors.');

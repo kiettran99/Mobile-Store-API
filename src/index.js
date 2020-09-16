@@ -4,9 +4,13 @@ require('./db/mongoose');
 const userRouter = require('./routers/api/user');
 const productRouter = require('./routers/api/product');
 const authRouter = require('./routers/api/auth');
+const postRouter = require('./routers/api/post');
+
+const notFoundRouter = require('./routers/not-found/not-found');
 // const errorHandler = require('./middleware/error-handler');
 const PORT = process.env.PORT;
-// @ts-ignore
+
+// @ts-ignore, Node can upload to firebase
 global.XMLHttpRequest = require('xhr2');
 
 const app = express();
@@ -21,6 +25,9 @@ app.use(express.json());
 app.use('/api/users', userRouter);
 app.use('/api/products', productRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/posts', postRouter);
+//The 404 Route (ALWAYS Keep this as the last route)
+app.use('*', notFoundRouter);
 
 //Start nodejs server
 const server = app.listen(PORT, () => {
