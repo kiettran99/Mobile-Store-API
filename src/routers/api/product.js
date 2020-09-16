@@ -5,6 +5,7 @@ const auth = require('../../middleware/auth');
 const isEmptyObject = require('../../utils/isEmptyObject');
 const { body, validationResult } = require('express-validator');
 const upload = require('../../utils/upload');
+const notification = require('../../utils/notification');
 
 router.get('/', async (req, res) => {
     try {
@@ -521,8 +522,8 @@ router.delete('/:product_id/comments/reply/:comment_id/:reply_id', auth, async (
         // Find Comment by id
         const comment = product.comments.find(comment => comment.id === commentId);
 
-         // Find Reply by id
-         const reply = comment.replies.find(reply => reply.id === replyId);
+        // Find Reply by id
+        const reply = comment.replies.find(reply => reply.id === replyId);
 
         // Check user
         if (reply.user.toString() !== req.user.id) {
@@ -535,7 +536,7 @@ router.delete('/:product_id/comments/reply/:comment_id/:reply_id', auth, async (
         comment.replies.splice(removeIndex, 1);
 
         await product.save();
-        
+
         res.json(comment);
     }
     catch (e) {
