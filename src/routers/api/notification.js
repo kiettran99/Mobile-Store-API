@@ -16,10 +16,44 @@ router.get('/', auth, async (req, res) => {
     }
 });
 
-// @route PUT /api/notification/markasread
+// @route PUT /api/notification/markasread/:id
+// @desc Make as read a message.
+// @access Private
+router.put('/markasread/:id', auth, async (req, res) => {
+    try {
+
+        const messageId = req.params.id;
+
+        if (!messageId) {
+            return res.status(400).send('Can not make as read.');
+        }
+
+        // Find notification and make message status true.
+        const notification = await Notification.findOneAndUpdate({
+            user: req.user._id,
+            'messages._id': messageId
+        }, {
+            $set: {
+                'messages.$.status': true
+            }
+        });
+
+        if (!notification) {
+            return res.status(404).send('Notification not found.');
+        }
+
+        res.send(notification);
+    }
+    catch (e) {
+        console.log(e);
+        res.status(500).send('Server is errors.');
+    }
+});
+
+// @route PUT /api/notification/markasreadall
 // @desc Make as read all messages.
 // @access Private
-router.put('/markasread', auth, async (req, res) => {
+router.put('/markasreadall', auth, async (req, res) => {
     try {
         // Find notification and make message status true.
         const notification = await Notification.findOneAndUpdate({ user: req.user._id }, {
