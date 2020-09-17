@@ -3,6 +3,7 @@ const User = require('../../models/user');
 const { body, validationResult } = require('express-validator');
 const isEmptyObject = require('../../utils/isEmptyObject');
 const authByRole = require('../../middleware/auth-by-role');
+const { createNotification } = require('../../utils/notification');
 
 // @route Post api/users/register
 // @desc Registry user
@@ -37,6 +38,8 @@ router.post('/register', [
     await user.save();
 
     const token = await user.generateAuthToken();
+
+    createNotification(user);
 
     res.json({ token });
   }

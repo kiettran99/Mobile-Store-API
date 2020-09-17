@@ -5,7 +5,7 @@ const auth = require('../../middleware/auth');
 const isEmptyObject = require('../../utils/isEmptyObject');
 const { body, validationResult } = require('express-validator');
 const upload = require('../../utils/upload');
-const notification = require('../../utils/notification');
+const { notify } = require('../../utils/notification');
 
 router.get('/', async (req, res) => {
     try {
@@ -281,6 +281,10 @@ router.put('/comment/:id', [auth,
         product.comments.push(newComment);
 
         await product.save();
+
+        const message = `${req.user.name} have just comment on ${product.name}`;
+
+        notify(req.user, 'followingPosts', product, message);
 
         res.json(product.comments);
     }

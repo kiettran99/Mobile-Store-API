@@ -5,7 +5,8 @@ const userRouter = require('./routers/api/user');
 const productRouter = require('./routers/api/product');
 const authRouter = require('./routers/api/auth');
 const postRouter = require('./routers/api/post');
-const followingRouter = require('./routers/api/following');
+// const followingRouter = require('./routers/api/following');
+const notificationRouter = require('./routers/api/notification');
 
 const notFoundRouter = require('./routers/not-found/not-found');
 // const errorHandler = require('./middleware/error-handler');
@@ -27,7 +28,8 @@ app.use('/api/users', userRouter);
 app.use('/api/products', productRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/posts', postRouter);
-app.use('/api/following', followingRouter);
+// app.use('/api/following', followingRouter);
+app.use('/api/notification', notificationRouter);
 //The 404 Route (ALWAYS Keep this as the last route)
 app.use('*', notFoundRouter);
 

@@ -8,21 +8,41 @@ const Notification = require('../models/notification');
  * @param message Message text alerts on UI.
  * @example 
  * const message = `${req.user.name} have just comment on ${product.name}`;
- * notification(req.user, 'followingPosts', product, message);
+ * notify(req.user, 'followingPosts', product, message);
  */
-const notification = async (user, following, collection, message) => {
+const notify = async (user, following, collection, message) => {
 
-    await Notification.updateMany({
-        [following]: collection.id,
-        user: { $nin: user._id }
-    }, {
-        $push: {
-            messages: {
-                text: message,
-                user: user.id
+    try {
+        await Notification.updateMany({
+            [following]: collection.id,
+            user: { $nin: user._id }
+        }, {
+            $push: {
+                messages: {
+                    text: message,
+                    user: user.id
+                }
             }
-        }
-    });
+        });
+    }
+    catch (e) {
+        console.log(e);
+    }
 };
 
-module.exports = notification;
+const createNotification = async (user) => {
+    try {
+        const notification = await Notification.findOne({ user: user._id });
+
+        if (!notification) {
+            await Notification.create({
+                user: user._id
+            });
+        }
+    }
+    catch (e) {
+        console.log(e);
+    }
+}
+
+module.exports = { notify, createNotification };
