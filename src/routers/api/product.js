@@ -284,7 +284,12 @@ router.put('/comment/:id', [auth,
 
         const message = `${req.user.name} have just comment on ${product.name}`;
 
-        notify(req.user, 'followingPosts', product, message);
+        notify(message, {
+            user: req.user,
+            collection: product,
+            topic: 'products',
+            following: 'followingPosts'
+        });
 
         res.json(product.comments);
     }

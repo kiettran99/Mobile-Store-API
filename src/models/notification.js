@@ -16,11 +16,23 @@ const notificationSchema = Schema({
             type: ObjectId,
             ref: 'User'
         },
+        name: {
+            type: String
+        },
+        avatar: {
+            type: String
+        },
         date: {
             type: Date,
             default: Date.now
         },
         text: {
+            type: String
+        },
+        topic: {
+            type: String
+        },
+        topicId: {
             type: String
         },
         status: {

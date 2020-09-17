@@ -2,15 +2,22 @@ const Notification = require('../models/notification');
 
 /**
  * @desc Notifying message to Notification's user is following.
- * @param user User has just interacted collection yet.
- * @param following followingType that user notify.
- * @param collection Collection(post) user is following.
  * @param message Message text alerts on UI.
+ * @param options Infomation user interacted collection.
  * @example 
- * const message = `${req.user.name} have just comment on ${product.name}`;
- * notify(req.user, 'followingPosts', product, message);
+ *    const message = `${req.user.name} have just comment on ${product.name}`;
+ *    notify(message, {
+ *           user: req.user,
+ *           collection: product,
+ *           topic: 'products',
+ *          following: 'followingPosts'
+ *       });
  */
-const notify = async (user, following, collection, message) => {
+const notify = async (message, options = {
+    user, collection, topic, following
+}) => {
+
+    const { user, collection, topic, following } = options;
 
     try {
         await Notification.updateMany({
@@ -20,7 +27,10 @@ const notify = async (user, following, collection, message) => {
             $push: {
                 messages: {
                     text: message,
-                    user: user.id
+                    user: user.id,
+                    name: user.name,
+                    topic,
+                    topicId: collection.id
                 }
             }
         });
