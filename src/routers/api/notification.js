@@ -7,7 +7,20 @@ const auth = require('../../middleware/auth');
 // @access Private
 router.get('/', auth, async (req, res) => {
     try {
-        const notification = await Notification.findOne({ user: req.user._id });
+        const skip = parseInt(req.query.skip) || 0;
+        const limit = parseInt(req.query.limit) || 1;
+
+        if (skip < 0 || limit < 0) {
+            return res.status(400).send('Skip or limit must be positive.');
+        }
+
+        const notification = await Notification.findOne({ user: req.user._id },
+            {
+                messages: {
+                    $slice: [skip, limit]
+                }
+            });
+
         res.json(notification);
     }
     catch (e) {

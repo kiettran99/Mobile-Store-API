@@ -26,11 +26,14 @@ const notify = async (message, options = {
         }, {
             $push: {
                 messages: {
-                    text: message,
-                    user: user.id,
-                    name: user.name,
-                    topic,
-                    topicId: collection.id
+                    $each: [{
+                        text: message,
+                        user: user.id,
+                        name: user.name,
+                        topic,
+                        topicId: collection.id
+                    }],
+                    $position: 0
                 }
             }
         });

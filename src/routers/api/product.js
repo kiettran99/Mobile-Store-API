@@ -20,8 +20,19 @@ router.get('/', async (req, res) => {
 
 router.get('/:id', async (req, res) => {
     try {
+        const skip = parseInt(req.query.skip) || 0;
+        const limit = parseInt(req.query.limit) || 4;
+
+        if (skip < 0 || limit < 0) {
+            return res.status(400).send('Skip or limit must be positive.');
+        }
+
         const id = req.params.id;
-        const product = await Product.findById(id);
+        const product = await Product.findById(id, {
+            comments: {
+                $slice: [skip, limit]
+            }
+        });
         res.send(product);
     }
     catch (e) {
