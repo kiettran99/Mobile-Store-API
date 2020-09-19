@@ -1,4 +1,5 @@
 const Notification = require('../models/notification');
+const { channel, pusher } = require('./pusher/pusher');
 
 /**
  * @desc Notifying message to Notification's user is following.
@@ -36,6 +37,15 @@ const notify = async (message, options = {
                     $position: 0
                 }
             }
+        });
+
+        // Puhser notification to client referesh notifcation.
+        pusher.trigger(channel, 'notification', {
+            text: message,
+            user: user.id,
+            name: user.name,
+            topic,
+            topicId: collection.id
         });
     }
     catch (e) {
