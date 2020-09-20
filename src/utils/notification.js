@@ -41,11 +41,10 @@ const notify = async (message, options = {
 
         // Puhser notification to client referesh notifcation.
         pusher.trigger(channel, 'notification', {
-            text: message,
             user: user.id,
-            name: user.name,
             topic,
-            topicId: collection.id
+            topicId: collection.id,
+            triggeredAt: Date.now()
         });
     }
     catch (e) {
